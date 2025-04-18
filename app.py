@@ -2,10 +2,9 @@ from flask import Flask, request, render_template, session, redirect, url_for
 import mysql.connector
 import os
 from werkzeug.utils import secure_filename
-import bcrypt
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(24))
+app.secret_key = 'supersecretkey'
 
 # MySQL configuration (for Docker Compose)
 db_config = {
@@ -40,13 +39,14 @@ def home():
 def login():
     if request.method == 'POST':
         username = request.form['username']
-        password = request.form['password'].encode('utf-8')
+        password = request.form['password']
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+        cursor.execute(query)
         user = cursor.fetchone()
         conn.close()
-        if user and bcrypt.checkpw(password, user[3].encode('utf-8')):
+        if user:
             session['username'] = user[1]
             session['role'] = user[4]
             return redirect(url_for('home'))
@@ -62,14 +62,12 @@ def signup():
         confirm_password = request.form['confirm_password']
         if password != confirm_password:
             return render_template('signup.html', error="Passwords do not match!")
-
-        hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
         try:
             cursor.execute(
                 "INSERT INTO users (username, email, password, role) VALUES (%s, %s, %s, 'user')",
-                (username, email, hashed_pw.decode('utf-8'))
+                (username, email, password)
             )
             conn.commit()
             conn.close()
@@ -83,12 +81,11 @@ def signup():
 def admin():
     if session.get('role') != 'admin':
         return "Unauthorized", 403
-
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, description, price, image FROM products")
     products = cursor.fetchall()
-
+    
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add':
@@ -127,7 +124,7 @@ def admin():
             cursor.execute("DELETE FROM products WHERE id=%s", (product_id,))
             conn.commit()
         return redirect(url_for('admin'))
-
+    
     conn.close()
     return render_template('admin.html', products=products)
 
@@ -138,4 +135,4 @@ def logout():
 
 if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=True)
