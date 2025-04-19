@@ -2,6 +2,7 @@ from flask import Flask, request, render_template, session, redirect, url_for
 import mysql.connector
 import os
 from werkzeug.utils import secure_filename
+import bcrypt
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
